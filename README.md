@@ -13,19 +13,19 @@ This is a Nagios plugin to check that
     and
 * If your backups go to disk (Disk-to-Disk backups)
 
-This this plugin is for you.
+Then this plugin is for you.
 
 ### What it can do
 
 This check reads the files named **disklist.conf** which are present in **/etc/amanda/backup-set-name/**
 
-It creates a list of all Disk List Entries.
+It creates a list of all Disk List Entries (DLEs).
 
 A DLE is a backup item - normally a file-system on a client host.
 
 No additional configuration is required.
 
-For the backup items (DLEs) found 3 things checked by this plugin:
+For the backup items (DLEs) found, 3 things are checked by this plugin:
 
 * Minimum backup age
   * warning or critical if the most recent backup (for any item/DLE) is more than 2 or 3 days old.
@@ -41,7 +41,7 @@ In addition, the plugin will also
 
 * Report as performance data the total size of all level 0 backups plus the most recent level 1 backups (for capacity planning), suitable for use with PNP4Nagios.
 
-By default, every backup item (DLE) which is configured is checked, but the check can be restricted to a particular backup-set or server.
+By default, every backup item (DLE) which is configured is checked, but the check can be restricted to a particular backup-set or client server.
 
 A PNP4Nagios template is also provided.
 
@@ -65,21 +65,23 @@ The backup-set 'redmine' is reporting a warning because the smallest backup in t
 
 There are 3 backups which are OK in the backup set redmine, the oldest of which is 17 hrs old, and the total size of which is 15G, excluding the one which is not OK.
 
-'proxy' has no OK backups, as it does not appear after the 'NN ok in...' message.
+'proxy' has no OK backups, as it does not appear after the '3 ok in...' message.
 
-The latest level 0 backups in 'proxy' and 'redmine' use 42 Gi bytes, and this includes OK and non-OK backups.
+'size' reports that the latest level 0 backups in 'proxy' and 'redmine' use 42 Gi bytes, and this includes OK and non-OK backups.
 
-Detailed per-backup-item information can be obtained by adding '-v' to the command line.
+Detailed, per-backup-item information can be obtained by adding '-v' to the command line.
 
 #### Sample Output - Verbose
 **`/usr/lib/nagios/plugins/check_amanda.pl -I nagios -s 10M -v`**
 
-`OK:       offsite-servers  cloud-nagios:        /var                      last backup l1 20150129040006   (6hrs) 146Mi+72Mi`
-`OK:       internal-servers onsite-nagios:       /var                      last backup l0 20150128210024  (13hrs) 818Mi`
-`Warning:  internal-servers onsite-nagios:       /etc                      last backup l0 20150128210024  (13hrs) 1268Ki`
-`NO Conf:  test-servers     test-nagios:         /etc                      last backup l0 20150105034106    (24d) 894Ki`
-`Oldest backup is 20150128210024 (13hrs)`
-`WARNING: 1 warning in internal-servers (1268Ki), 2 ok in internal-servers (14hrs,818Mi), offsite-servers (7hrs,146Mi), size 965Mi +72Mi|total_sets=2 total_servers=2 total_items=3 ok=2 warn=1 crit=0 l0size=988216k l1size=73873k`
+```
+OK:       offsite-servers  cloud-nagios:        /var                      last backup l1 20150129040006   (6hrs) 146Mi+72Mi
+OK:       internal-servers onsite-nagios:       /var                      last backup l0 20150128210024  (13hrs) 818Mi
+Warning:  internal-servers onsite-nagios:       /etc                      last backup l0 20150128210024  (13hrs) 1268Ki
+NO Conf:  test-servers     test-nagios:         /etc                      last backup l0 20150105034106    (24d) 894Ki
+Oldest backup is 20150128210024 (13hrs)
+WARNING: 1 warning in internal-servers (1268Ki), 2 ok in internal-servers (14hrs,818Mi), offsite-servers (7hrs,146Mi), size 965Mi +72Mi|total_sets=2 total_servers=2 total_items=3 ok=2 warn=1 crit=0 l0size=988216k l1size=73873k
+```
 
 The '-v' flag turns on verbose output.
 
@@ -87,11 +89,11 @@ In this case, we have used -I to search all backup-sets for servers with 'nagios
 
 The status message is telling us that one of the item in internal-servers is in state warning because it's size is only 1268Ki, and '-s 10M' asks for a warning if any item is less than 10M in size.
 
-The status message also tells us there are 2 items which are OK, and that these are within the backup-sets internal-servers and offsite-servers. The total l0 size of OK backups and oldest OK backup is show for each OK set.
+The status message also tells us there are 2 items which are OK, and that these are within the backup-sets internal-servers and offsite-servers. The total l0 size of OK backups and age of the oldest OK backup is show for each OK backup-set.
 
-The verbose messages above go to stderr output, and show us the state of each backup-item that was examined and included in the status message.
+The verbose messages shown above go to stderr output, and show us the state of each backup-item that was examined and included in the status message.
 
-There is an additional message, 'NO Conf' that says that it found a backup-item for the server 'test-nagios' that did not have a corresponding disklist.conf entry. This means that the backup item or backup-set was removed, but the files were not purged from the disk.
+There is an additional message, 'NO Conf' that says that it found a backup-item for the server 'test-nagios' that did not have a corresponding disklist.conf entry. This means that the backup-item or backup-set was removed, but the files were not purged from the disk.
 
 Items which appear as 'NO Conf' are not included in the status message, nor in the performance data.
 
@@ -106,7 +108,7 @@ The 'Oldest backup' message is the oldest of all the most-recent backups which w
 Check all backup items with default settings:
 
 * Warning if more than 2 days old, critical if more than 3 days old
-* Warning if the most level 0 backup is less than 64k, critical if less and 32k
+* Warning if the most recent level 0 backup is less than 64k, critical if less than 32k
 * Critical if no backup items found
 
 **`check_amanda.pl -m /mnt/bigdisk`**
@@ -148,7 +150,7 @@ This plugin will normally be used with NRPE. The default timeout for check_nrpe 
 The plugin reads the 1st line of each backup item.
 
 This plugin does not distinguish between a backup-in-progress and a completed-backup. 
-ie. the total size reported may include backups-in-progress, and be lower than it should be.
+ie. the total size reported may include backups-in-progress, and be lower than it should be until all backups are completed.
 
 #### Performance Data
 
