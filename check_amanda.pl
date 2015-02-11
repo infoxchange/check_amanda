@@ -441,6 +441,21 @@ sub backup_file_check () {
 # This list needs to comprehesive, because we don't know which servers appear in which backup set
 %backups = get_disk_lists();
 
+# In verbose mode, also scan the backup media for deleted backup sets
+if ( $optarg{v} ) {
+	my $dir;
+	foreach $dir ( glob( "$media_dir/*/" ) ) {
+		$backup_set = $dir;
+		$backup_set =~ s{/$}{};
+		$backup_set =~ s{.*/}{};
+		if ( ( -f "$dir/state" || -l "$dir/state" ) && ( ! exists( $backups{$backup_set} ) ) ) {
+			# We found a backup directory that's not in any config
+			# Create a key, so that we will scan it later for backup files
+			$backups{$backup_set} = undef;
+		}
+	}
+}
+
 print_debug(Dumper(\%backups));
 
 ##############################################################################
