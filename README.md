@@ -17,7 +17,7 @@ Then this plugin is for you.
 
 ### What it can do
 
-This check reads the files named **disklist.conf** which are present in **/etc/amanda/backup-set-name/**
+This check reads the files named **disklist.conf** which are present in the directory **/etc/amanda/**_backup-set-name/_
 
 It creates a list of all Disk List Entries (DLEs).
 
@@ -85,11 +85,11 @@ WARNING: 1 warning in internal-servers (1268Ki), 2 ok in internal-servers (14hrs
 
 The '-v' flag turns on verbose output.
 
-In this case, we have used -I to search all backup-sets for servers with 'nagios' in their name.
+In this case, we have used `-I` to search all backup-sets for servers with 'nagios' in their name.
 
-The status message is telling us that one of the item in internal-servers is in state warning because it's size is only 1268Ki, and '-s 10M' asks for a warning if any item is less than 10M in size.
+The status message is telling us that one of the item in internal-servers is in state warning because it's size is only 1268Ki, and `-s 10M` asks for a warning if any item is less than 10M in size.
 
-The status message also tells us there are 2 items which are OK, and that these are within the backup-sets internal-servers and offsite-servers. The total l0 size of OK backups and age of the oldest OK backup is show for each OK backup-set.
+The status message also tells us there are 2 items which are OK, and that these are within the backup-sets internal-servers and offsite-servers. The total l0 size of OK backups and age of the oldest OK backup is shown for each OK backup-set.
 
 The verbose messages shown above go to stderr output, and show us the state of each backup-item that was examined and included in the status message.
 
@@ -152,7 +152,35 @@ The plugin reads the 1st line of each backup item.
 This plugin does not distinguish between a backup-in-progress and a completed-backup. 
 ie. the total size reported may include backups-in-progress, and be lower than it should be until all backups are completed.
 
-#### Performance Data
+### Sample config
+
+```
+define service {
+  use                            generic-service-quiet          ; template name
+  service_description            amanda-backups
+  hostgroup_name                 backup-servers
+  check_interval                 60
+  max_check_attempts             8
+  retry_interval                 15
+  notification_interval          120
+  stalking_options               o,w,c    ; save output when it changes - should be infrequent}
+  check_command                  check_nrpe_1arg!check_amanda -t 60
+```
+
+`nrpe.cfg` config
+
+```
+command[check_amanda]=/usr/bin/sudo -u amandabackup /usr/lib/nagios/plugins/check_amanda.pl -C 50
+```
+
+`/etc/sudoers` config
+
+```
+Defaults:nagios !requiretty
+nagios	ALL=(amandabackup) NOPASSWD: /usr/lib/nagios/plugins/check_amanda.pl
+```
+
+### Performance Data
 
 This plugin generates some summary information as Nagios performance data. This can be graphed using PNP4Nagios.
 
@@ -164,3 +192,12 @@ Of particular interest are the items:
 These statistics are reported for the selected backup-sets and servers only. ie. after -i/-x/-I/-X have been applied.
 
 A PNP4Nagios template is supplied.
+
+![Sample pnp4nagios graphs](check_amanda.pnp4nagios.png)
+
+In the sample graph, there is a sharp drop in the `l0size` graph on the 7th and 8th.
+This is the full-backup of a large backup starting, and then growing until it is complete.
+
+There is no corresponding alert, because this plugin does not check the validity of the backup files, just that they exist and are recent.
+
+The l0size and l1size statistics are useful for estimating what retention is feasible.
