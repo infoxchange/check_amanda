@@ -393,6 +393,37 @@ sub backup_file_check () {
 		if ( $server eq '' ) {
 			next;
 		}
+		my $stat = stat("$File::Find::name");
+		# Size, without the amanda metadata header
+		my $size = ($stat->size) - 32768;
+		if ( $size < 0 ) {
+			$size = 0;
+		}
+		if ( $size < 1024 ) {
+			# This file is very small - is it OK ?
+			if ( open(BACKUP,"<$File::Find::name") ) {
+				# Skip over the Amanda metadata
+				seek(BACKUP,32768,0);
+				my $backup_data;
+				read(BACKUP,$backup_data,$size);
+				close(BACKUP);
+				
+				if ( substr($backup_data,0,2) eq "\x1f\x8b" && length($backup_data) <= 20 ) {
+					# Data is gzipped, and empty
+					print_debug("  Skipping L$level backup for $server:$filesystem (". $size . " bytes) empty gzip data");
+					next;
+				}
+				$backup_data =~ s/\x00//g;
+				if ( length($backup_data) == 0 ) {
+					print_debug("  Skipping L$level backup for $server:$filesystem (". $size . " bytes) backup is empty");
+					next;
+				}
+			} else {
+				warn($File::Find::name . ": " . $!);
+				# Failed to open file - don't include this file in analysis
+				next;
+			}
+		}
 		# If we look for ...{$server}{$filesystem} it will create the ...{$server} hash key quietly, which is not desirable
 		# So we look for ...{server} first
 		if ( defined($backups{$backup_set}{$server}) && defined($backups{$backup_set}{$server}{$filesystem}) ) {
@@ -406,12 +437,6 @@ sub backup_file_check () {
 				$backups_latest_level{$backup_set}{$server}{$filesystem} = $level;
 			}
 			print_debug("Found backup file without a config: $backup_set $server:$filesystem on $timestamp ".append_age_size('',$timestamp,stat("$File::Find::name")->size)."\n");
-		}
-		my $stat = stat("$File::Find::name");
-		# Size, without the amanda metadata header
-		my $size = ($stat->size) - 32768;
-		if ( $size < 0 ) {
-			$size = 0;
 		}
 		if ( $level eq '0' && $timestamp > $level0_backup_latest{$backup_set}{$server}{$filesystem} ) {
 			# ie the most recent level 0 backup available
