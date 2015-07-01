@@ -101,6 +101,7 @@ Usage:
 	-w  ... warning  if a backup less than warn_hrs old cannot be found for any backup item (default: $warn_hrs)
 	-c  ... critical if a backup less than crit_hrs old cannot be found for any backup item (default: $crit_hrs)
 	-C  ... critical is less that min_backups (filesystems, DBs, etc) are found in total (default: $fail_safe)
+	-m  ... top-level directory where the backup files are stored (default: $media_dir)
 	-v  ... verbose messages to STDERR - prints details for each backup item
 	-d  ... debug messages to STDERR for testing
 	-x  ... exclude backup sets (comma or space separated list)
@@ -113,11 +114,11 @@ Usage:
 		size excludes the 1st 32k of tha backup file, which is amanda metadata
 
 Examples:
-	$0
-		... check all backups which have been configured
+	$0 -m /backups
+		... check all backups which have been configured, looking for backup files in /backup
 
 	$0 -x weekly-backups
-		... check all backup sets except 'weekly-backups'
+		... check all backup sets except 'weekly-backups', look for backups in the default $media_dir
 
 	$0 -w 192 -c 360 -i weekly-backups
 		... check only the backup set 'weekly-backups'.
@@ -314,31 +315,57 @@ sub get_disk_lists() {
 	#
 	my $etc_amanda = '/etc/amanda';
 	my %result = ();
+	my $disklist_conf;
+	my $skip_options = 0;
 	if( opendir(ETC_AMANDA,$etc_amanda) ) {
 		while(my $backup_set = readdir ETC_AMANDA ) {
 			if ( $backup_set eq '.' || $backup_set eq '..' ) {
 				next;
 			}
-			if ( -d "$etc_amanda/$backup_set" ) {
-				if ( -f "$etc_amanda/$backup_set/disklist.conf" ) {
-					if ( open(DISK_LIST,"<$etc_amanda/$backup_set/disklist.conf") ) {
-						while(<DISK_LIST>) {
-							if ( /^([-0-9a-z_]\S*)\s+"([^"]*)"\s.*{/ ) {
-								my $server = $1;
-								my $filesystem = $2;
-								# Time of last backup
-								$result{$backup_set}{$server}{$filesystem} = 0;
-								$backup_filesystems_conf++;
+			if ( chdir "$etc_amanda/$backup_set" ) {
+				foreach $disklist_conf ( glob("disklist.conf disklist") ) {
+					if ( -f "$etc_amanda/$backup_set/$disklist_conf" ) {
+						if ( open(DISK_LIST,"<$etc_amanda/$backup_set/$disklist_conf") ) {
+							while(<DISK_LIST>) {
+								# Ignore comments
+								s/#.*//;
+								# Ignore empty lines
+								if ( /^\s*$/ ) {
+									next;
+								}
+								if ( /^\s*}/ ) {
+									$skip_options = 0;
+									next;
+								} elsif ( /^([-0-9a-z_]\S*)\s+("[^"]*"|[^"]\S*)\s.*{/ ) {
+									my $server = $1;
+									my $filesystem = $2;
+									if ( $filesystem =~ /^"([^"]+)"$/ ) {
+										$filesystem = $1;
+									}
+									# Time of last backup
+									$result{$backup_set}{$server}{$filesystem} = 0;
+									$backup_filesystems_conf++;
+									$skip_options = 1;
+								} elsif ( $skip_options == 0 && /^\s*(\S+)\s+("[^"]*"|[^"]\S*)/ ) {
+									my $server = $1;
+									my $filesystem = $2;
+									if ( $filesystem =~ /^"([^"]+)"$/ ) {
+										$filesystem = $1;
+									}
+									# Time of last backup
+									$result{$backup_set}{$server}{$filesystem} = 0;
+									$backup_filesystems_conf++;
+								}
 							}
+							close(DISK_LIST);
+						} else {
+							push @message, "$backup_set/disklist.conf: $!";
+							$exit |= 1;
 						}
-						close(DISK_LIST);
-					} else {
-						push @message, "$backup_set/disklist.conf: $!";
-						$exit |= 1;
-					}
-				} # -f $backup_set/disklist.conf
-			} # -d $backup_set
-			$backup_sets_conf++;
+					} # -f $backup_set/$disklist_conf
+				} # foreach
+				$backup_sets_conf++;
+			} # chdir $backup_set
 		}
 		
 		close(ETC_AMANDA);
