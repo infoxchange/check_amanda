@@ -412,9 +412,11 @@ sub backup_file_check () {
 	# Weed out the 'TAPESTART' files by name, and ignore directories
 	if ( $_ !~ /^00000\..*AA-[0-9]+$/ &&  -f $File::Find::name ) {
 		print_debug("Examining " . $File::Find::name );
-		my @backup_path = split ( /\//, $File::Find::name );
-		$backup_set = $backup_path[-3];
+		my @backup_path = split ( /\/+/, $File::Find::name );
 		$backup_file = $backup_path[-1];
+		$backup_set = $File::Find::name;
+		$backup_set =~ s{^$media_dir/*}{};
+		$backup_set =~ s{/.*}{};
 		$server = '';
 		($server,$filesystem,$level,$timestamp) = backup_head($File::Find::name);
 		if ( $server eq '' ) {
