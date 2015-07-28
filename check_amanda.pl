@@ -70,8 +70,8 @@ my $backup_filesystems_used_crit = 0;
 my $media_dir = '/mnt/store1';
 my $warn_hrs = 49;
 my $crit_hrs = 73;
-my $warn_size = 65536;
-my $crit_size = 16384;
+my $warn_size = 131072;
+my $crit_size = 65536;
 my %include_sets = ();
 my %exclude_sets = ();
 my $include_hosts = '';
@@ -558,7 +558,7 @@ foreach $backup_set ( keys(%backups) ) {
 			}
 
 			# Note that 0 or undef are both less than any timestamp string, for the purposes of comparing timestamps
-			if ( $backup_timestamp lt $crit_timestamp || $l0_size < $crit_size ) {
+			if ( $backup_timestamp lt $crit_timestamp || $l0_size <= $crit_size ) {
 				if ( $backup_timestamp == 0 ) {
 					# Note: '(' is lexographically lt '0'-'9', so (never) is less than any other timestamp, and is preserved as the worst case
 					$backup_sets_age_crit{$backup_set} = '(never)';
@@ -574,7 +574,7 @@ foreach $backup_set ( keys(%backups) ) {
 					append_age_size('',$backup_timestamp,undef),
 					$l0_size_SI));
 
-				if ( $l0_size < $crit_size ) {
+				if ( $l0_size <= $crit_size ) {
 					if ( $backup_sets_size_crit{$backup_set} eq undef || $backup_sets_size_crit{$backup_set} > $l0_size ) {
 						# worst size for this backup set
 						$backup_sets_size_crit{$backup_set} = $l0_size;
@@ -584,7 +584,7 @@ foreach $backup_set ( keys(%backups) ) {
 				$backup_sets_found{$backup_set} |= 2;
 				$servers_found{$server} |= 2;
 				$exit |= 2;
-			} elsif ( $backup_timestamp lt $warn_timestamp || $l0_size < $warn_size ) {
+			} elsif ( $backup_timestamp lt $warn_timestamp || $l0_size <= $warn_size ) {
 				printv( sprintf("Warning:  %-16s %-21s%-25s last backup %2s %s%9s %s\n",$backup_set,$server.':',$filesystem,$level,$backup_timestamp,append_age_size('',$backup_timestamp,undef),$l0_size_SI));
 				# What's the worst case for this backup set?
 				if ( $backup_timestamp lt $warn_timestamp ) {
@@ -592,7 +592,7 @@ foreach $backup_set ( keys(%backups) ) {
 						$backup_sets_age_warn{$backup_set} = $backup_timestamp;
 					}
 				}
-				if ( $l0_size < $warn_size ) {
+				if ( $l0_size <= $warn_size ) {
 					if ( $backup_sets_size_warn{$backup_set} eq undef || $backup_sets_size_warn{$backup_set} > $l0_size ) {
 						# worst size for this backup set
 						$backup_sets_size_warn{$backup_set} = $l0_size;
