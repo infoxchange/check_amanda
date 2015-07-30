@@ -23,7 +23,7 @@ It creates a list of all Disk List Entries (DLEs).
 
 A DLE is a backup item - normally a file-system on a client host.
 
-The configuration required is the -m /path/to/backups argument, which is the top of the backup file-tree
+Other than specifying the top of the the backup file-tree using `-m /path/to/backups` no other configuration is required.
 
 For the backup items (DLEs) found, 3 things are checked by this plugin:
 
@@ -99,6 +99,28 @@ Items which appear as 'NO Conf' are not included in the status message, nor in t
 
 The 'Oldest backup' message is the oldest of all the most-recent backups which were considered (OK, Warning and Critical), excluding the 'No Conf' items.
 
+#### Sample Output - List Files
+```
+# /usr/lib/nagios/plugins/ixa/check_amanda.pl -I samba -l
+OK:       samba-set         samba-srv-01:          /data/groups               last backup l1 20150729183007  (15hrs) 766Gi+425Mi
+   /mnt/store1/samba-set/slot60/00001.samba-srv-01._data_groups.0
+   /mnt/store1/samba-set/slot68/00001.samba-srv-01._data_groups.1
+OK:       samba-set         samba-srv-01:          /data/homes                last backup l2 20150729183007  (15hrs) 154Gi+68Gi
+   /mnt/store1/samba-set/slot59/00001.samba-srv-01._data_homes.0
+   /mnt/store1/samba-set/slot65/00001.samba-srv-01._data_homes.1
+   /mnt/store1/samba-set/slot67/00001.samba-srv-01._data_homes.2
+Oldest backup is 20150729183007 (15hrs)
+OK: 2 ok in samba-set (15hrs,920Gi), size 920Gi +69Gi|total_sets=1 total_servers=1 total_items=2 ok=2 warn=0 crit=0 l0size=965122950k l1size=72047326k
+```
+The '-l' flag turns on the 'list files' output and also turns on verbose output.
+
+In the above output, we have 2 backup items (DLE's) for the server `samba-srv-01` these being `/homes` and `/groups`
+The individual status messages `OK: ...` tells us the size and age of the most recent backup. Underneath the status message are listed the most recent level 0, level 1 and (if applicable) level 2 backup-files that would be required to restore the most recent backup.
+
+This can be useful if there is a problem with the most-recent backup, and makes it easy to locate the files in question.
+
+It is also useful for `NO Conf: ...` backups, which still have a presence on the backup file-system, but are not present in the Zmanda web-interface.
+
 ### Use-case examples
 
 #### Default use case
@@ -135,6 +157,8 @@ Exclude the backup set named 'weekly-backups'. Check everything else against the
 
 Exclude backup items for servers with 'dev' or 'test' in the name from the check. Check that at least 30 backup items are included in the check. Check everything else with the default settings.
 
+The `-X ...` option is particularly useful for excluding servers which have been retired (decomissioned), but for which the backup config and data are still kept (in order to make it easy to restore data if required).
+
 ### Notes
 
 The arguments -i and -x expect a comma-seperated list of specific backup-set names (not regular expressions)
@@ -143,7 +167,11 @@ The arguments -I and -X expect a single regular expression and select by hostnam
 
 `-I '^my-db-server$'`
 
+A backup with a file-size of zero (after subtracting the header) is considered a failed backup, and is ignored.
+
 Other than checking size and date, no further integrity checking is done.
+ie. this plugin will not detect corrupted or truncated backups.
+Although this would be feasible, such a check would not likely complete in under 60s.
 
 This plugin will normally be used with NRPE. The default timeout for check_nrpe is 10 seconds. Increase this to at least 60 seconds to avoid 'false criticals' due to the plugin taking a long time to go through the whole tree of backup items on the backup-media disk.
 
@@ -160,8 +188,8 @@ define service {
   service_description            amanda-backups
   hostgroup_name                 backup-servers
   check_interval                 60
-  max_check_attempts             8
-  retry_interval                 15
+  max_check_attempts             12
+  retry_interval                 5
   notification_interval          120
   stalking_options               o,w,c    ; save output when it changes - should be infrequent}
   check_command                  check_nrpe_1arg!check_amanda -t 60
