@@ -42,14 +42,9 @@ my @exit = qw/OK: WARNING: CRITICAL: UNKNOWN:/;
 
 my %backups;
 my %backups_noconfig;
-my %level0_backup_size;
-my %level1_backup_size;
-my $level0_total_size;
-my $level1_total_size;
+my $level0_total_size = 0;
+my $level1_total_size = 0;
 
-my %level0_backup_latest = ();
-my %level1_backup_latest = ();
-my %backups_latest_level = ();
 my $backup_sets_conf = 0;
 # Worst case of age per backup-set
 my %backup_sets_age_ok = ();
@@ -91,18 +86,19 @@ my %SI_exp = (
 	'ti' => 1099511627776,
 );
 
-$getopt_result = getopts('hVvdw:c:x:i:X:I:C:m:s:S:', \%optarg) ;
+$getopt_result = getopts('hVvldw:c:x:i:X:I:C:m:s:S:', \%optarg) ;
 
 sub HELP_MESSAGE() {
 	print <<EOF;
 Usage:
-	$0 [-v] [-d] [-w warn_hrs] [-c crit_hrs] [-x exclude_sets | -i include_sets] [ -X exclude_hosts_regex | -I include_hosts_regex ] [ -C min_backups ] [ -m media_dir ]
+	$0 [-v] [-l] [-d] [-w warn_hrs] [-c crit_hrs] [-x exclude_sets | -i include_sets] [ -X exclude_hosts_regex | -I include_hosts_regex ] [ -C min_backups ] [ -m media_dir ]
 
 	-w  ... warning  if a backup less than warn_hrs old cannot be found for any backup item (default: $warn_hrs)
 	-c  ... critical if a backup less than crit_hrs old cannot be found for any backup item (default: $crit_hrs)
 	-C  ... critical is less that min_backups (filesystems, DBs, etc) are found in total (default: $fail_safe)
 	-m  ... top-level directory where the backup files are stored (default: $media_dir)
-	-v  ... verbose messages to STDERR - prints details for each backup item
+	-v  ... verbose messages to STDERR - prints details for each backup item (DLE)
+	-l  ... list files to STDERR - lists the latest backup files found for each backup item (DLE)
 	-d  ... debug messages to STDERR for testing
 	-x  ... exclude backup sets (comma or space separated list)
 	-i  ... include only these backup sets (comma or space separated list)
@@ -125,9 +121,9 @@ Examples:
 		    warning  if the youngest backup is more than  8 days old
 		    critical if the youngest backup is more than 15 days old
 
-	$0 -s 10M -S 128Ki
-		... warning  if any filesystem is less than 10*1000*1000 bytes in size
-		... critical if any filesystem is less than 128*1024 bytes in size
+	$0 -s 10M -S 96Ki
+		... warning  if any filesystem (DLE) is less than 10*1000*1000 bytes in size
+		... critical if any filesystem (DLE) is less than 96*1024 bytes in size
 
 Sample Output:
 	Note that the 'size' value is given as X+Y where X in the sum of the latest level0 backups, and Y is the sum of any later level1 backups
@@ -142,13 +138,47 @@ Sample Output:
 	CRITICAL: 1 critical in win-servers (never), 1 warning in win-servers (2d), 1 ok in win-servers (17hrs,1952Ki), size 2864Ki +569|total_sets=1 total_servers=1 total_items=3 ok=1 warn=1 crit=1 l0size=2864k l1size=0k
 
 	In this case, we are ONLY checking the backup set 'win-servers'
-	Add -v provides some detail on each backup item (ie. filesystem or Disk List Entry)
+	Adding -v provides some detail on each backup item (ie. filesystem or Disk List Entry)
 	There is one critical backup, that has never (not yet?) been backed up.
 	There is one warning, because the backup is older than 2 days
 	The ok message tells us that the total size of the level 0 backups (1952Ki) which are OK and the age of the oldest OK backup in the set, either level 0 or level 1
 	The size message says that the total level 0 backups come to 2864Ki, plus newer level 1 backups of 569 bytes (excludes the 32k amanda header on the file)
 
+	The size used for -s and -S and listed in the output excludes the 32k Amanda metadata header - it represents the actual backup data only
+	If compression is used, the 'size' is the compressed size
+
 EOF
+}
+sub VERSION_MESSAGE() {
+	print "perl: $^V\n$0: $rcs_id\n";
+}
+
+sub parse_SI_suffix($) {
+	my $arg = lc($_[0]);
+
+	if( $arg =~ /^([0-9]+)([mkgt]i?)$/i ) {
+		$arg = $1;
+		$arg *= $SI_exp{"$2"};
+	}
+
+	return($arg);
+}
+
+sub printv($) {
+	my $str = $_[0];
+	if ( $optarg{v} || $optarg{l} ) {
+		chomp $str;
+		print STDERR $str;
+		print STDERR "\n";
+	}
+}
+
+sub print_debug($) {
+	if ( $optarg{d} ) {
+		chomp( $_[-1] );
+		print STDERR @_;
+		print STDERR "\n";
+	}
 }
 
 # Any invalid options?
@@ -159,9 +189,6 @@ if ( $getopt_result == 0 ) {
 if ( $optarg{h} ) {
 	HELP_MESSAGE();
 	exit 0;
-}
-sub VERSION_MESSAGE() {
-	print "perl: $^V\n$0: $rcs_id\n";
 }
 if ( $optarg{V} ) {
 	VERSION_MESSAGE();
@@ -180,8 +207,8 @@ my $warn_timestamp =  strftime "%Y%m%d%H%M%S", localtime($now - 3600*$warn_hrs);
 my $crit_timestamp =  strftime "%Y%m%d%H%M%S", localtime($now - 3600*$crit_hrs);
 my $oldest_backup  =  strftime "%Y%m%d%H%M%S", localtime($now);
 
-print_debug( "$warn_timestamp\n");
-print_debug( "$crit_timestamp\n");
+#print_debug( "$warn_timestamp\n");
+#print_debug( "$crit_timestamp\n");
 
 if ( defined($optarg{C}) ) {
 	$fail_safe = $optarg{C};
@@ -213,34 +240,6 @@ if ( defined($optarg{s}) ) {
 
 if ( defined($optarg{S}) ) {
 	$crit_size = parse_SI_suffix($optarg{S});
-}
-
-sub printv($) {
-	my $str = $_[0];
-	if ( $optarg{v} ) {
-		chomp $str;
-		print STDERR $str;
-		print STDERR "\n";
-	}
-}
-
-sub print_debug($) {
-	if ( $optarg{d} ) {
-		chomp( $_[-1] );
-		print STDERR @_;
-		print STDERR "\n";
-	}
-}
-
-sub parse_SI_suffix($) {
-	my $arg = lc($_[0]);
-
-	if( $arg =~ /^([0-9]+)([mkgt]i?)$/i ) {
-		$arg = $1;
-		$arg *= $SI_exp{"$2"};
-	}
-
-	return($arg);
 }
 
 sub add_SI_suffix($) {
@@ -282,7 +281,7 @@ sub append_age_size($$$) {
 	my $age = undef;
 	my $age_t = 0;
 	my $age_hrs;
-	if ( $timestamp eq undef ) {
+	if ( ! defined ( $timestamp ) ) {
 		# Do nothing
 	} elsif ( $timestamp == 0 ) {
 		# size is always 0 for backups that haven't happened
@@ -297,13 +296,13 @@ sub append_age_size($$$) {
 		}
 	}
 	#print_debug(sprintf("Backup Set: %-20s, age_t=%s, age_hrs=%4s days=%s size=%s",$set,$age_t,$age_hrs,$age,$size));
-	if ( $size ne undef && $age ne undef ) {
+	if ( defined($size) && defined($age) ) {
 		$size = add_SI_suffix($size);
 		return("$set ($age,$size)");
-	} elsif ( $size ne undef ) {
+	} elsif ( defined($size) ) {
 		$size = add_SI_suffix($size);
 		return("$set ($size)");
-	} elsif ( $age ne undef ) {
+	} elsif ( defined($age) ) {
 		return("$set ($age)");
 	} else {
 		return($set);
@@ -343,7 +342,7 @@ sub get_disk_lists() {
 										$filesystem = $1;
 									}
 									# Time of last backup
-									$result{$backup_set}{$server}{$filesystem} = 0;
+									$result{$backup_set}{$server}{$filesystem}{'timestamp'} = 0;
 									$backup_filesystems_conf++;
 									$skip_options = 1;
 								} elsif ( $skip_options == 0 && /^\s*(\S+)\s+("[^"]*"|[^"]\S*)/ ) {
@@ -392,7 +391,7 @@ sub backup_head ($) {
 			$filesystem = $3;
 			$level = $4;
 			$filesystem =~ s/^"|"$//g;
-			print_debug( join(" ",($server,$filesystem,$level,$timestamp)));
+			print_debug( "  " . join(" ",($server,$filesystem,$level,$timestamp)));
 			return($server,$filesystem,$level,$timestamp);
 		}
 	} else {
@@ -402,7 +401,7 @@ sub backup_head ($) {
 		$exit |= 1;
 		warn("Cannot open $_[0]: $!");
 	}
-	return();
+	return('',,,);
 }
 
 sub backup_file_check () {
@@ -420,7 +419,7 @@ sub backup_file_check () {
 		$server = '';
 		($server,$filesystem,$level,$timestamp) = backup_head($File::Find::name);
 		if ( $server eq '' ) {
-			next;
+			return;
 		}
 		my $stat = stat("$File::Find::name");
 		# Size, without the amanda metadata header
@@ -440,53 +439,44 @@ sub backup_file_check () {
 				if ( substr($backup_data,0,2) eq "\x1f\x8b" && length($backup_data) <= 20 ) {
 					# Data is gzipped, and empty
 					print_debug("  Skipping L$level backup for $server:$filesystem (". $size . " bytes) empty gzip data");
-					next;
+					return;
 				}
 				$backup_data =~ s/\x00//g;
 				if ( length($backup_data) == 0 ) {
 					print_debug("  Skipping L$level backup for $server:$filesystem (". $size . " bytes) backup is empty");
-					next;
+					return;
 				}
 			} else {
 				warn($File::Find::name . ": " . $!);
 				# Failed to open file - don't include this file in analysis
-				next;
+				return;
 			}
 		}
 		# If we look for ...{$server}{$filesystem} it will create the ...{$server} hash key quietly, which is not desirable
 		# So we look for ...{server} first
 		if ( defined($backups{$backup_set}{$server}) && defined($backups{$backup_set}{$server}{$filesystem}) ) {
-			if ( $timestamp > $backups{$backup_set}{$server}{$filesystem} ) {
-				$backups{$backup_set}{$server}{$filesystem} = $timestamp;
-				$backups_latest_level{$backup_set}{$server}{$filesystem} = $level;
+			if ( $timestamp > $backups{$backup_set}{$server}{$filesystem}{"timestamp$level"} ) {
+				$backups{$backup_set}{$server}{$filesystem}{"timestamp$level"} = $timestamp;
+				$backups{$backup_set}{$server}{$filesystem}{"size$level"} = $size;
+				$backups{$backup_set}{$server}{$filesystem}{"file$level"} = $File::Find::name;
+				if ( $timestamp > $backups{$backup_set}{$server}{$filesystem}{timestamp} ) {
+					$backups{$backup_set}{$server}{$filesystem}{'timestamp'} = $timestamp;
+					$backups{$backup_set}{$server}{$filesystem}{'level'} = $level;
+				}
+				print_debug("  Found L$level backup for $server:$filesystem ". $stat->size . " bytes");
 			}
 		} else {
-			if ( $timestamp > $backups_noconfig{$backup_set}{$server}{$filesystem} ) {
-				$backups_noconfig{$backup_set}{$server}{$filesystem} = $timestamp;
-				$backups_latest_level{$backup_set}{$server}{$filesystem} = $level;
+			if ( $timestamp > $backups_noconfig{$backup_set}{$server}{$filesystem}{"timestamp$level"} ) {
+				$backups_noconfig{$backup_set}{$server}{$filesystem}{"timestamp$level"} = $timestamp;
+				$backups_noconfig{$backup_set}{$server}{$filesystem}{"size$level"} = $size;
+				$backups_noconfig{$backup_set}{$server}{$filesystem}{"file$level"} = $File::Find::name;
+				if ( $timestamp > $backups_noconfig{$backup_set}{$server}{$filesystem}{'timestamp'} ) {
+					$backups_noconfig{$backup_set}{$server}{$filesystem}{'timestamp'} = $timestamp;
+					$backups_noconfig{$backup_set}{$server}{$filesystem}{'level'} = $level;
+				}
+				print_debug("Found backup file without a config: $backup_set $server:$filesystem on $timestamp ".append_age_size('',$timestamp,stat("$File::Find::name")->size)."\n");
 			}
-			print_debug("Found backup file without a config: $backup_set $server:$filesystem on $timestamp ".append_age_size('',$timestamp,stat("$File::Find::name")->size)."\n");
 		}
-		if ( $level eq '0' && $timestamp > $level0_backup_latest{$backup_set}{$server}{$filesystem} ) {
-			# ie the most recent level 0 backup available
-			$level0_backup_latest{$backup_set}{$server}{$filesystem} = $timestamp;
-			$level0_backup_size{$backup_set}{$server}{$filesystem} = $size;
-			print_debug("  Found L0 backup for $server:$filesystem ". $stat->size . " bytes");
-		} elsif ( $level gt '0' && $timestamp > $level1_backup_latest{$backup_set}{$server}{$filesystem} ) {
-			# ie the most recent level 1+ backup available
-			$level1_backup_latest{$backup_set}{$server}{$filesystem} = $timestamp;
-			if ( $level eq '1' ) {
-				$level1_backup_size{$backup_set}{$server}{$filesystem} = $size;
-			} else {
-				# This is not strictly accuarate, because there may be (eg) 2 level 2 backups newer than the level 1
-				# and we should only count the more recent
-				# There's also a good chance that we see the l2+ backup before the l1, and simply overwrite it
-				# It's close enough for most cases, and doesn't warrant the additional complexity of tracking this
-				$level1_backup_size{$backup_set}{$server}{$filesystem} += $size;
-			}
-			print_debug("  Found L$level backup for $server:$filesystem ". $stat->size . " bytes");
-		}
-
 	}
 
 }
@@ -517,7 +507,7 @@ print_debug(Dumper(\%backups));
 # Summarize all problems per-backup set
 ##############################################################################
 foreach $backup_set ( keys(%backups) ) {
-	if ( $exclude_sets{$backup_set} == 1 ) {
+	if ( defined( $exclude_sets{$backup_set} ) ) {
 		next;
 	}
 	if ( %include_sets ne '0' && ! defined($include_sets{$backup_set} ) ) {
@@ -540,20 +530,36 @@ foreach $backup_set ( keys(%backups) ) {
 		my $filesystem;
 		foreach $filesystem ( keys ( $backups{$backup_set}{$server} ) ) {
 			#print "$backup_set $server $filesystem\n";
-			my $backup_timestamp = $backups{$backup_set}{$server}{$filesystem};
-			my $l0_size = 0+$level0_backup_size{$backup_set}{$server}{$filesystem};
+			my $backup_timestamp = $backups{$backup_set}{$server}{$filesystem}{'timestamp0'};
+			my $l0_size = 0+$backups{$backup_set}{$server}{$filesystem}{'size0'};
 			my $l1_size = 0;
+			my $lN_size = 0;
 			my $l0_size_SI = add_SI_suffix($l0_size);
-			if ( $level1_backup_latest{$backup_set}{$server}{$filesystem} ge $backup_timestamp ) {
-				# only if this level 1 backup is more recent than the level 0
-				$l1_size = $level1_backup_size{$backup_set}{$server}{$filesystem};
+			# Find all levelN backups with timestamps more recent than the level0 backup
+			my $levelN = 1;
+			my @files = ( $backups{$backup_set}{$server}{$filesystem}{'file0'} );
+			while ( defined ( $backups{$backup_set}{$server}{$filesystem}{"timestamp$levelN"} ) ) {
+				if ( $backups{$backup_set}{$server}{$filesystem}{"timestamp$levelN"} ge $backup_timestamp ) {
+					# only if this level N backup is more recent than last level N-1
+					$lN_size = $backups{$backup_set}{$server}{$filesystem}{"size$levelN"};
+					$l1_size += $lN_size;
+					$backup_timestamp = $backups{$backup_set}{$server}{$filesystem}{"timestamp$levelN"};
+					push @files, $backups{$backup_set}{$server}{$filesystem}{"file$levelN"};
+				} else {
+					last;
+				}
+				$levelN += 1;
+			}
+			if ( $l1_size > 0 ) {
 				$l0_size_SI .= '+' . add_SI_suffix($l1_size);
 			}
 			$level0_total_size += $l0_size;
 			$level1_total_size += $l1_size;
 
-			my $level = 'l' . $backups_latest_level{$backup_set}{$server}{$filesystem};
-			if ( $level eq 'l' ) {
+			my $level;
+			if ( defined( $backups{$backup_set}{$server}{$filesystem}{'level'} ) ) {
+				$level = 'l' . $backups{$backup_set}{$server}{$filesystem}{'level'};
+			} else {
 				$level = '';
 			}
 
@@ -605,14 +611,17 @@ foreach $backup_set ( keys(%backups) ) {
 			} else {
 				printv( sprintf("OK:       %-16s %-21s%-25s last backup %2s %s%9s %s\n",$backup_set,$server.':',$filesystem,$level,$backup_timestamp,append_age_size('',$backup_timestamp,undef),$l0_size_SI));
 				# What's the worst case for this backup set?
-				if ( $backup_sets_age_ok{$backup_set} == 0 || $backup_timestamp lt $backup_sets_age_ok{$backup_set} ) {
+				if ( ( ! defined( $backup_sets_age_ok{$backup_set} )) || $backup_timestamp lt $backup_sets_age_ok{$backup_set} ) {
 					$backup_sets_age_ok{$backup_set} = $backup_timestamp;
 				}
 				# For the OK message, report the total size of the backup set
 				$backup_sets_size_ok{$backup_set} += $l0_size;
-				# initialize, but don't override and existing value
+				# initialize, but don't override any existing value
 				$backup_sets_found{$backup_set} |= 0;
 				$backup_filesystems_used_ok++;
+			}
+			if ( defined($optarg{l}) ) {
+				printv( "   " . join("\n   ",@files)."\n");
 			}
 			if ( $backup_timestamp > 0 ) {
 				if ( $oldest_backup gt $backup_timestamp ) {
@@ -626,7 +635,7 @@ foreach $backup_set ( keys(%backups) ) {
 
 printv("Oldest backup is $oldest_backup".append_age_size('',$oldest_backup,undef));
 
-if ( $optarg{v} ) {
+if ( defined($optarg{v}) || defined($optarg{l}) ) {
 	# Verbose
 	foreach $backup_set ( keys(%backups_noconfig) ) {
 		# Apply the include/exclude criteria - otherwise the 'NO Conf' messages can outnumber the interesting ones
@@ -646,10 +655,31 @@ if ( $optarg{v} ) {
 			}
 			my $filesystem;
 			foreach $filesystem ( keys ( $backups_noconfig{$backup_set}{$server} ) ) {
-				my $backup_timestamp = $backups_noconfig{$backup_set}{$server}{$filesystem};
-				my $l0_size = 0+$level0_backup_size{$backup_set}{$server}{$filesystem};
-				my $level = $backups_latest_level{$backup_set}{$server}{$filesystem};
-				print STDERR sprintf("NO Conf:  %-16s %-21s%-25s last backup l%1s %s%9s %s\n",$backup_set,$server.':',$filesystem,$level,$backup_timestamp,append_age_size('',$backup_timestamp,undef),add_SI_suffix($l0_size));
+				my $backup_timestamp = $backups_noconfig{$backup_set}{$server}{$filesystem}{'timestamp0'};
+				my $l0_size = 0+$backups_noconfig{$backup_set}{$server}{$filesystem}{'size0'};
+				my $l1_size = 0;
+				my @files = ( $backups_noconfig{$backup_set}{$server}{$filesystem}{'file0'} );
+				my $levelN = 1;
+				while ( defined ( $backups_noconfig{$backup_set}{$server}{$filesystem}{"timestamp$levelN"} ) ) {
+					if ( $backups_noconfig{$backup_set}{$server}{$filesystem}{"timestamp$levelN"} ge $backup_timestamp ) {
+						# only if this level N backup is more recent than last level N-1
+						$l1_size += $backups_noconfig{$backup_set}{$server}{$filesystem}{"size$levelN"};
+						$backup_timestamp = $backups_noconfig{$backup_set}{$server}{$filesystem}{"timestamp$levelN"};
+						push @files, $backups_noconfig{$backup_set}{$server}{$filesystem}{"file$levelN"};
+					} else {
+						last;
+					}
+					$levelN += 1;
+				}
+				my $l0_size_SI = add_SI_suffix($l0_size);
+				if ( $l1_size > 0 ) {
+					$l0_size_SI .= '+' . add_SI_suffix($l1_size);
+				}
+				my $level = $backups_noconfig{$backup_set}{$server}{$filesystem}{'level'};
+				print STDERR sprintf("NO Conf:  %-16s %-21s%-25s last backup l%1s %s%9s\n",$backup_set,$server.':',$filesystem,$level,$backup_timestamp,append_age_size('',$backup_timestamp,$l0_size_SI));
+				if ( defined($optarg{l}) ) {
+					printv( "   " . join("\n   ",@files)."\n");
+				}
 			}
 		}
 	}

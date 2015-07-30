@@ -23,7 +23,7 @@ It creates a list of all Disk List Entries (DLEs).
 
 A DLE is a backup item - normally a file-system on a client host.
 
-No additional configuration is required.
+The configuration required is the -m /path/to/backups argument, which is the top of the backup file-tree
 
 For the backup items (DLEs) found, 3 things are checked by this plugin:
 
@@ -32,7 +32,7 @@ For the backup items (DLEs) found, 3 things are checked by this plugin:
     This is configurable in hours.
     Either level 0 or level 1+ backups qualify.
 * Minimum backup size
-  * warning or critical if the most recent *level 0* backup is less than 32k or 64k, respectively.
+  * warning or critical if the most recent *level 0* backup is less than 64k or 128k, respectively.
     This is configurable in k, M, G or T
 * Minumum number of backup items (DLEs) found.
   * Critical if less than 1 backup item found, configurable.
