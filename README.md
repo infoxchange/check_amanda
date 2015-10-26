@@ -171,14 +171,15 @@ A backup with a file-size of zero (after subtracting the header) is considered a
 
 Other than checking size and date, no further integrity checking is done.
 ie. this plugin will not detect corrupted or truncated backups.
-Although this would be feasible, such a check would not likely complete in under 60s.
+Although this would be feasible, such a check would not be likely complete in under 60s.
 
 This plugin will normally be used with NRPE. The default timeout for check_nrpe is 10 seconds. Increase this to at least 60 seconds to avoid 'false criticals' due to the plugin taking a long time to go through the whole tree of backup items on the backup-media disk.
 
 The plugin reads the 1st line of each backup item.
 
-This plugin does not distinguish between a backup-in-progress and a completed-backup. 
-ie. the total size reported may include backups-in-progress, and be lower than it should be until all backups are completed.
+This plugin distinguishs between a backup-in-progress and a completed-backup by using the time-stamp on the file.
+Any backup file modified in the last 30 seconds is considered 'in-progress' and is excluded from the check results.
+The next-oldest file is used instead.
 
 ### Sample config
 
@@ -223,9 +224,23 @@ A PNP4Nagios template is supplied.
 
 ![Sample pnp4nagios graphs](check_amanda.pnp4nagios.png)
 
-In the sample graph, there is a sharp drop in the `l0size` graph on the 7th and 8th.
-This is the full-backup of a large backup starting, and then growing until it is complete.
+In the sample graph, there are a number of failing checks on the 22nd of the month.
+This is due to new backups being added, and not having been backed up yet.
 
-There is no corresponding alert, because this plugin does not check the validity of the backup files, just that they exist and are recent.
+This shows on the output as 
+```
+CRITICAL: 14 critical in internal-servers (never), 43 ok in 19 backup sets, size 1785Gi +75Gi
+```
+Running a manual backup will clear this alert, once the backup is complete.
 
 The l0size and l1size statistics are useful for estimating what retention is feasible.
+
+The l0size and l1size give a simple answer to the question:
+* Q. How much disk space do I need to store 4 weeks of full weekly backups and their daily incremental backups?
+* A. 4 * l0size + 24 * l1size = 1.92T * 4 + 89.7G * 24 = 9.8 TB
+
+Note that the plugin is reporting 1785 GiB (gibi bytes, ie 1024^3), while rrdtool is reporting 1917 GB (giga bytes, ie 10^9)
+
+l0size and l1size are also useful for observing trends in the size of a complete backup of all servers.
+Simple disk-usage statistics are difficult to interpret, because they do not show how many complete backups are present at any time.
+

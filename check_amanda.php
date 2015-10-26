@@ -14,21 +14,21 @@ $ds_name[2]="$NAME[1],$NAME[2],$NAME[3]";
 
 # Critial
 $ds_ndx=6;
-$def[1]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "MAX");
-$def[1]  .= rrd::area(  "$NAME[$ds_ndx]",  "#ffA0A0",                           $NAME[$ds_ndx]."\t");
-$def[1]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "AVERAGE", "MAX"),     "%4.0lf  ");
+$def[1]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "AVERAGE");
+$def[1]  .= rrd::area(  "$NAME[$ds_ndx]",  "#ffA0A0",                           sprintf('%-6s',$NAME[$ds_ndx]));
+$def[1]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "MIN", "AVERAGE", "MAX"),     "%4.0lf  ");
 
 # Warning
 $ds_ndx=5;
-$def[1]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "MAX");
-$def[1]  .= rrd::area(  "$NAME[$ds_ndx]",  "#ffffA0",                           $NAME[$ds_ndx]."\t", 'STACK');
-$def[1]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "AVERAGE", "MAX"),     "%4.0lf  ");
+$def[1]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "AVERAGE");
+$def[1]  .= rrd::area(  "$NAME[$ds_ndx]",  "#ffffA0",                           sprintf('%-6s',$NAME[$ds_ndx]), 'STACK');
+$def[1]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "MIN", "AVERAGE", "MAX"),     "%4.0lf  ");
 
 # OK
 $ds_ndx=4;
-$def[1]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "MAX");
-$def[1]  .= rrd::area(  "$NAME[$ds_ndx]",  "#A0ffA0",                           $NAME[$ds_ndx]."\t", 'STACK');
-$def[1]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "AVERAGE", "MAX"),     "%4.0lf  ");
+$def[1]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "AVERAGE");
+$def[1]  .= rrd::area(  "$NAME[$ds_ndx]",  "#A0ffA0",                           sprintf('%-6s',$NAME[$ds_ndx]), 'STACK');
+$def[1]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "MIN", "AVERAGE", "MAX"),     "%4.0lf  ");
 
 
 # Same again, with a line for emphasis
@@ -49,21 +49,21 @@ $def[2] = '';
 
 # Draw the total_items first, this is the 'background'
 $ds_ndx=3;
-$def[2]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "MAX");
-$def[2]  .= rrd::area(  "$NAME[$ds_ndx]",  "#A0A0A0",                           $NAME[$ds_ndx]."\t");
-$def[2]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "AVERAGE", "MAX"),     "%4.0lf  ");
+$def[2]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "AVERAGE");
+$def[2]  .= rrd::area(  "$NAME[$ds_ndx]",  "#A0A0A0",                           sprintf('%-13s',$NAME[$ds_ndx]));
+$def[2]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "MIN", "AVERAGE", "MAX"),     "%4.0lf  ");
 
 # Draw the servers next (blue)
 $ds_ndx=2;
-$def[2]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "MAX");
-$def[2]  .= rrd::area(  "$NAME[$ds_ndx]",  "#A0A0ff",                           $NAME[$ds_ndx]."\t");
-$def[2]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "AVERAGE", "MAX"),     "%4.0lf  ");
+$def[2]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "AVERAGE");
+$def[2]  .= rrd::area(  "$NAME[$ds_ndx]",  "#A0A0ff",                           sprintf('%-13s',$NAME[$ds_ndx]));
+$def[2]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "MIN", "AVERAGE", "MAX"),     "%4.0lf  ");
 
 # Draw the backup sets (purple)
 $ds_ndx=1;
-$def[2]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "MAX");
-$def[2]  .= rrd::area(  "$NAME[$ds_ndx]",  "#ffA0ff",                           $NAME[$ds_ndx]."\t");
-$def[2]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "AVERAGE", "MAX"),     "%4.0lf  ");
+$def[2]  .= rrd::def(   "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "AVERAGE");
+$def[2]  .= rrd::area(  "$NAME[$ds_ndx]",  "#ffA0ff",                           sprintf('%-13s',$NAME[$ds_ndx]));
+$def[2]  .= rrd::gprint("$NAME[$ds_ndx]",  array("LAST", "MIN", "AVERAGE", "MAX"),     "%4.0lf  ");
 
 # Same again, with a line for emphasis
 $ds_ndx=3; # total_items
@@ -83,14 +83,14 @@ $def[3] = '';
 $ds_ndx=7;
 $def[3]  .= rrd::def(    "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "MAX");
 $def[3]  .= rrd::cdef(          'l0bytes',   "$NAME[$ds_ndx],1024,*");
-$def[3]  .= rrd::area(          'l0bytes',  "#A0E0E0",                           $NAME[$ds_ndx]."\t");
-$def[3]  .= rrd::gprint(        'l0bytes',  array("LAST", "AVERAGE", "MAX"),     "%6.3lg %s");
+$def[3]  .= rrd::area(          'l0bytes',  "#A0E0E0",                           $NAME[$ds_ndx]);
+$def[3]  .= rrd::gprint(        'l0bytes',  array("LAST", "MIN", "AVERAGE", "MAX"),     "%6.3lg %s");
 
 $ds_ndx=8;
 $def[3]  .= rrd::def(    "$NAME[$ds_ndx]",  $RRDFILE[$ds_ndx],   $DS[$ds_ndx],     "MAX");
 $def[3]  .= rrd::cdef(          'l1bytes',   "$NAME[$ds_ndx],1024,*");
-$def[3]  .= rrd::area(          'l1bytes',  "#C0C0ff",                           $NAME[$ds_ndx]."\t");
-$def[3]  .= rrd::gprint(        'l1bytes',  array("LAST", "AVERAGE", "MAX"),     "%6.3lg %s");
+$def[3]  .= rrd::area(          'l1bytes',  "#C0C0ff",                           $NAME[$ds_ndx]);
+$def[3]  .= rrd::gprint(        'l1bytes',  array("LAST", "MIN", "AVERAGE", "MAX"),     "%6.3lg %s");
 
 # Same again, with a line for emphasis
 $ds_ndx=7; # l0size

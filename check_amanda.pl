@@ -422,6 +422,12 @@ sub backup_file_check () {
 			return;
 		}
 		my $stat = stat("$File::Find::name");
+		if ( $now - ($stat->mtime) < 30 ) {
+			# This file has been written in the last 30s, so it's probably not complete yet
+			# Ignore this file as a potential backup file until it is complete
+			# A Level 1 backup with few or no changes on a largs fs could still result in a false positive (maybe)
+			return;
+		}
 		# Size, without the amanda metadata header
 		my $size = ($stat->size) - 32768;
 		if ( $size < 0 ) {
