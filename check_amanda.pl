@@ -352,7 +352,7 @@ sub get_disk_lists() {
 										$filesystem = $1;
 									}
 									# Time of last backup
-									$result{$backup_set}{$server}{$filesystem} = 0;
+									$result{$backup_set}{$server}{$filesystem}{'timestamp'} = 0;
 									$backup_filesystems_conf++;
 								}
 							}
@@ -520,7 +520,7 @@ foreach $backup_set ( keys(%backups) ) {
 		next;
 	}
 	# Find the latest backups for this backup set
-	find ( \&backup_file_check, ( "$media_dir/$backup_set" ) );
+	find ( { wanted => \&backup_file_check, follow => 1, follow_skip => 2 } , ( "$media_dir/$backup_set" ) );
 
 	# Check the latest backup against our thresholds
 	my $server;
