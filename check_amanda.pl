@@ -413,6 +413,10 @@ sub backup_file_check () {
 		print_debug("Examining " . $File::Find::name );
 		my @backup_path = split ( /\/+/, $File::Find::name );
 		$backup_file = $backup_path[-1];
+		if ( $backup_path[-2] eq 'data' ) {
+			# This is a symlink to an actual slotNNN directory - we prefer the real pathname
+			return;
+		}
 		$backup_set = $File::Find::name;
 		$backup_set =~ s{^$media_dir/*}{};
 		$backup_set =~ s{/.*}{};
