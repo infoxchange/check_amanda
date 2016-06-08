@@ -23,6 +23,7 @@
 use strict;
 use File::Find;
 use File::stat;
+use Cwd 'realpath';
 use Getopt::Std;
 use Data::Dumper;
 use POSIX qw(strftime);
@@ -407,16 +408,16 @@ sub backup_head ($) {
 sub backup_file_check () {
 	my $backup_set;
 	my $backup_file;
+	my $backup_file_realpath;
 	my ($server,$filesystem,$level,$timestamp);
 	# Weed out the 'TAPESTART' files by name, and ignore directories
 	if ( $_ !~ /^00000\..*AA-[0-9]+$/ &&  -f $File::Find::name ) {
 		print_debug("Examining " . $File::Find::name );
 		my @backup_path = split ( /\/+/, $File::Find::name );
 		$backup_file = $backup_path[-1];
-		if ( $backup_path[-2] eq 'data' ) {
-			# This is a symlink to an actual slotNNN directory - we prefer the real pathname
-			return;
-		}
+		# The tape directories slotNNN also contain a symlink 'data' which points to one of the slotNNN directories
+		# We prefer to report the real pathname, but still need to process the original pathname for extracting $backup_set
+		$backup_file_realpath = realpath($File::Find::name);
 		$backup_set = $File::Find::name;
 		$backup_set =~ s{^$media_dir/*}{};
 		$backup_set =~ s{/.*}{};
@@ -468,7 +469,7 @@ sub backup_file_check () {
 			if ( $timestamp > $backups{$backup_set}{$server}{$filesystem}{"timestamp$level"} ) {
 				$backups{$backup_set}{$server}{$filesystem}{"timestamp$level"} = $timestamp;
 				$backups{$backup_set}{$server}{$filesystem}{"size$level"} = $size;
-				$backups{$backup_set}{$server}{$filesystem}{"file$level"} = $File::Find::name;
+				$backups{$backup_set}{$server}{$filesystem}{"file$level"} = $backup_file_realpath;
 				if ( $timestamp > $backups{$backup_set}{$server}{$filesystem}{timestamp} ) {
 					$backups{$backup_set}{$server}{$filesystem}{'timestamp'} = $timestamp;
 					$backups{$backup_set}{$server}{$filesystem}{'level'} = $level;
@@ -479,7 +480,7 @@ sub backup_file_check () {
 			if ( $timestamp > $backups_noconfig{$backup_set}{$server}{$filesystem}{"timestamp$level"} ) {
 				$backups_noconfig{$backup_set}{$server}{$filesystem}{"timestamp$level"} = $timestamp;
 				$backups_noconfig{$backup_set}{$server}{$filesystem}{"size$level"} = $size;
-				$backups_noconfig{$backup_set}{$server}{$filesystem}{"file$level"} = $File::Find::name;
+				$backups_noconfig{$backup_set}{$server}{$filesystem}{"file$level"} = $backup_file_realpath;
 				if ( $timestamp > $backups_noconfig{$backup_set}{$server}{$filesystem}{'timestamp'} ) {
 					$backups_noconfig{$backup_set}{$server}{$filesystem}{'timestamp'} = $timestamp;
 					$backups_noconfig{$backup_set}{$server}{$filesystem}{'level'} = $level;
