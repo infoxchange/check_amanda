@@ -506,7 +506,7 @@ if ( $optarg{v} ) {
 		if ( ( -f "$dir/state" || -l "$dir/state" ) && ( ! exists( $backups{$backup_set} ) ) ) {
 			# We found a backup directory that's not in any config
 			# Create a key, so that we will scan it later for backup files
-			$backups{$backup_set} = undef;
+			$backups{$backup_set} = {};
 		}
 	}
 }
